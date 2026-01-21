@@ -35,13 +35,13 @@
                 );
                 
                 // Get MedicationRequests for the selected patient
-                client.request("/MedicationRequest?patient=" + client.patient.id, {
-                    resolveReferences: [ "medicationReference" ],
+                client.request("/Observation?patient=" + client.patient.id, {
+                    resolveReferences: [ "subject" ],
                     graph: true
                 })
                 
                 // Reject if no MedicationRequests are found
-                .then(function(data) {
+                .then(function(data) {but 
                     if (!data.entry || !data.entry.length) {
                         throw new Error("No medications found for the selected patient");
                     }
