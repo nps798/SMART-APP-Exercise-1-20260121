@@ -19,8 +19,8 @@
         <h4>Current Patient</h4>
         <div id="patient">Loading...</div>
         <br/>
-        <h4>MedicationStatement</h4>
-        <div id="MedicationStatement">Loading...</div>
+        <h4>MedicationRequest</h4>
+        <div id="MedicationRequest">Loading...</div>
         <script type="text/javascript">
             FHIR.oauth2.ready().then(function(client) {
                 
@@ -34,8 +34,8 @@
                     }
                 );
                 
-                // Get MedicationStatement for the selected patient
-                client.request("MedicationStatement?patient=" + client.patient.id, {
+                // Get MedicationRequest for the selected patient
+                client.request("MedicationRequest?patient=" + client.patient.id, {
                     flat: true // Automatically maps bundle entries into a simple array
                 })
                 .then(function(data) {
@@ -46,11 +46,11 @@
                 })
                 // Render the encounters (or any error)
                 .then(
-                    function(encounters) {
-                        document.getElementById("MedicationStatement").innerText = JSON.stringify(encounters, null, 4);
+                    function(MedicationRequest) {
+                        document.getElementById("MedicationRequest").innerText = JSON.stringify(MedicationRequest, null, 4);
                     },
                     function(error) {
-                        document.getElementById("MedicationStatement").innerText = error.stack;
+                        document.getElementById("MedicationRequest").innerText = error.stack;
                     }
                 );
 
