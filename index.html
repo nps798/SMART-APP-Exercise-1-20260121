@@ -5,7 +5,7 @@
         <title>Example SMART App</title>
         <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
         <style>
-            #patient, #meds {
+            #patient, #encounters {
                 font-family: Monaco, monospace;
                 white-space: pre;
                 font-size: 13px;
@@ -19,12 +19,12 @@
         <h4>Current Patient</h4>
         <div id="patient">Loading...</div>
         <br/>
-        <h4>Medications</h4>
-        <div id="meds">Loading...</div>
+        <h4>Encounters</h4>
+        <div id="encounters">Loading...</div>
         <script type="text/javascript">
             FHIR.oauth2.ready().then(function(client) {
                 
-                // Render the current patient (or any error)
+                // Render the current patient
                 client.patient.read().then(
                     function(pt) {
                         document.getElementById("patient").innerText = JSON.stringify(pt, null, 4);
@@ -34,28 +34,23 @@
                     }
                 );
                 
-                // Get MedicationRequests for the selected patient
-                client.request("/Observation?patient=" + client.patient.id, {
-                    resolveReferences: [ "subject" ],
-                    graph: true
+                // Get Encounters for the selected patient
+                client.request("Encounter?patient=" + client.patient.id, {
+                    flat: true // Automatically maps bundle entries into a simple array
                 })
-                
-                // Reject if no MedicationRequests are found
-                .then(function(data) {but 
-                    if (!data.entry || !data.entry.length) {
-                        throw new Error("No medications found for the selected patient");
+                .then(function(data) {
+                    if (!data || !data.length) {
+                        throw new Error("No encounters found for the selected patient");
                     }
-                    return data.entry;
+                    return data;
                 })
-                
-
-                // Render the current patient's medications (or any error)
+                // Render the encounters (or any error)
                 .then(
-                    function(meds) {
-                        document.getElementById("meds").innerText = JSON.stringify(meds, null, 4);
+                    function(encounters) {
+                        document.getElementById("encounters").innerText = JSON.stringify(encounters, null, 4);
                     },
                     function(error) {
-                        document.getElementById("meds").innerText = error.stack;
+                        document.getElementById("encounters").innerText = error.stack;
                     }
                 );
 
