@@ -1,60 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Example SMART App</title>
-        <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
-        <style>
-            #patient, #encounters {
-                font-family: Monaco, monospace;
-                white-space: pre;
-                font-size: 13px;
-                height: 30vh;
-                overflow: scroll;
-                border: 1px solid #CCC;
-            }
-        </style>
-    </head>
-    <body>
-        <h4>Current Patient</h4>
-        <div id="patient">Loading...</div>
-        <br/>
-        <h4>MedicationRequest</h4>
-        <div id="MedicationRequest">Loading...</div>
-        <script type="text/javascript">
-            FHIR.oauth2.ready().then(function(client) {
-                
-                // Render the current patient
-                client.patient.read().then(
-                    function(pt) {
-                        document.getElementById("patient").innerText = JSON.stringify(pt, null, 4);
-                    },
-                    function(error) {
-                        document.getElementById("patient").innerText = error.stack;
-                    }
-                );
-                
-                // Get MedicationRequest for the selected patient
-                client.request("MedicationRequest?patient=" + client.patient.id, {
-                    flat: true // Automatically maps bundle entries into a simple array
-                })
-                .then(function(data) {
-                    if (!data || !data.length) {
-                        throw new Error("No encounters found for the selected patient");
-                    }
-                    return data;
-                })
-                // Render the encounters (or any error)
-                .then(
-                    function(MedicationRequest) {
-                        document.getElementById("MedicationRequest").innerText = JSON.stringify(MedicationRequest, null, 4);
-                    },
-                    function(error) {
-                        document.getElementById("MedicationRequest").innerText = error.stack;
-                    }
-                );
+<head>
+    <meta charset="UTF-8">
+    <title>SMART Patient Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/fhirclient/build/fhir-client.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --status-stopped: #ef4444;
+            --status-active: #22c55e;
+        }
 
-            }).catch(console.error);
-        </script>
-    </body>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        /* Patient Header Card */
+        .patient-card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 2rem;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .avatar {
+            width: 64px;
+            height: 64px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .patient-info h1 { margin: 0; font-size: 1.5rem; }
+        .patient-meta { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem; }
+
+        /* Medication List */
+        .section-title { font-weight: 600; font-size: 1.1rem; margin-bottom: 1rem; }
+
+        .med-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .med-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            transition: transform 0.1s;
+        }
+
+        .med-item:hover { border-color: var(--primary); }
+
+        .med-details h3 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--primary); }
+        .med-instruction { font-size: 0.9rem; color: var(--text-muted); }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .status-stopped { background: #fee2e2; color: var(--status-stopped); }
+        .status-active { background: #dcfce7; color: var(--status-active); }
+
+        .loading { text-align: center; padding: 3rem; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2>Clinical Viewer</h2>
+    </header>
+
+    <div id="app">
+        <div class="loading">Initializing connection to EHR...</div>
+    </div>
+</div>
+
+<script>
+    // Helper to format FHIR Patient Name
+    function getPatientName(pt) {
+        if (!pt.name || pt.name.length === 0) return "Unknown";
+        let name = pt.name[0];
+        return `${name.prefix ? name.prefix.join(' ') + ' ' : ''}${name.given.join(' ')} ${name.family}`;
+    }
+
+    // Helper to format Dosage instructions
+    function formatDosage(med) {
+        if (!med.dosageInstruction || med.dosageInstruction.length === 0) return "No instructions provided";
+        let instr = med.dosageInstruction[0];
+        let text = "";
+
+        if (instr.asNeededBoolean) text += "Take as needed. ";
+        if (instr.timing && instr.timing.repeat) {
+            const r = instr.timing.repeat;
+            text += `Every ${r.period} ${r.periodUnit === 'h' ? 'hours' : r.periodUnit}. `;
+        }
+        if (instr.doseAndRate && instr.doseAndRate[0].doseQuantity) {
+            text += `Dose: ${instr.doseAndRate[0].doseQuantity.value} unit(s).`;
+        }
+        return text || "Review prescription for full details.";
+    }
+
+    FHIR.oauth2.ready().then(function(client) {
+        const app = document.getElementById("app");
+
+        // Fetch Patient and Meds concurrently
+        Promise.all([
+            client.patient.read(),
+            client.request("MedicationRequest?patient=" + client.patient.id, { flat: true })
+        ]).then(([patient, meds]) => {
+            
+            // Generate HTML
+            let html = `
+                <div class="patient-card">
+                    <div class="avatar">${patient.name[0].family[0]}</div>
+                    <div class="patient-info">
+                        <h1>${getPatientName(patient)}</h1>
+                        <div class="patient-meta">
+                            ID: ${patient.id} • DOB: ${patient.birthDate} • Gender: ${patient.gender}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title">Medication History</div>
+                <div class="med-grid">
+            `;
+
+            if (!meds || meds.length === 0) {
+                html += `<div class="med-item">No medication records found.</div>`;
+            } else {
+                meds.forEach(m => {
+                    const statusClass = m.status === 'stopped' ? 'status-stopped' : 'status-active';
+                    html += `
+                        <div class="med-item">
+                            <div class="med-details">
+                                <h3>${m.medicationCodeableConcept.text}</h3>
+                                <div class="med-instruction">${formatDosage(m)}</div>
+                                <div class="patient-meta" style="margin-top:8px">Authored: ${new Date(m.authoredOn).toLocaleDateString()}</div>
+                            </div>
+                            <span class="status-badge ${statusClass}">${m.status}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `</div>`;
+            app.innerHTML = html;
+
+        }).catch(err => {
+            app.innerHTML = `<div style="color:red">Error: ${err.message}</div>`;
+        });
+    });
+</script>
+
+</body>
 </html>
